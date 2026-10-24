@@ -94,4 +94,114 @@ with st.container(border=True):
         placeholder="Ej: Comer pastas el sábado por una zona linda con árboles..."
     )
     
-    col
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        fecha_cita = st.date_input(
+            "🐢 2. ¿Qué día?",
+            value=datetime.date.today() + datetime.timedelta(days=1)
+        )
+    with col2:
+        comidas = st.multiselect(
+            "🍽️ 3. ¿Qué comidas incluimos?",
+            options=["Desayuno", "Almuerzo", "Merienda", "Cena"],
+            default=["Desayuno", "Almuerzo", "Merienda", "Cena"],
+            help="Puedes quitar las que no quieras incluir."
+        )
+    
+    st.write("")
+    planificar = st.button("🌻 Armar mi cita ideal 🐢")
+
+# ==========================================
+# 4. LÓGICA MULTI-AGENTE Y RESULTADOS CLAROS
+# ==========================================
+def consultar_ia(client, rol_sistema, mensaje):
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=mensaje,
+        config=types.GenerateContentConfig(
+            system_instruction=rol_sistema,
+            temperature=0.7,
+        )
+    )
+    return resp.text
+
+if planificar:
+    if not API_KEY:
+        st.error("🔑 Falta agregar `GEMINI_API_KEY` en los Secrets de Streamlit Cloud.")
+    elif not idea_usuario.strip():
+        st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
+    elif not comidas:
+        st.warning("🐢 Elige al menos una comida de la lista.")
+    else:
+        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        dia_str = f"{dias[fecha_cita.weekday()]} {fecha_cita.strftime('%d/%m')}"
+        comidas_str = ", ".join(comidas)
+        pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
+
+        try:
+            client = genai.Client(api_key=API_KEY)
+
+            with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
+                paseos = consultar_ia(
+                    client,
+                    "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.",
+                    pedido
+                )
+                lugares = consultar_ia(
+                    client,
+                    f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto.",
+                    pedido
+                )
+                instruccion_juez = (
+                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer.\n"
+                    "Separa tu respuesta en EXACTAMENTE 4 partes usando el texto exacto `===SEP===`:\n"
+                    "Parte 1: Resumen de 2 líneas de cómo se pusieron de acuerdo.\n"
+                    "Parte 2: Itinerario Presupuesto Bajo.\n"
+                    "Parte 3: Itinerario Presupuesto Medio.\n"
+                    "Parte 4: Itinerario Presupuesto Alto.\n\n"
+                    "REGLA VISUAL PARA CADA PRESUPUESTO: Usa viñetas cortas y claras:\n"
+                    "- **🌅 Mañana**, **☀️ Tarde** y **🌙 Noche**.\n"
+                    f"- En cada comida ({comidas_str}), pon **Opción 1** y **Opción 2** con una descripción de 1 sola línea.\n"
+                    "- Nada de textos largos; debe leerse de un vistazo."
+                )
+                consenso = consultar_ia(
+                    client,
+                    instruccion_juez,
+                    f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes."
+                )
+
+            partes = consenso.split("===SEP===")
+
+            st.write("")
+            st.markdown("### ✨ Elige tu nivel de presupuesto:")
+
+            tab_bajo, tab_medio, tab_alto = st.tabs([
+                "🐢 Bajo (Económico)",
+                "🌻 Medio (Equilibrado)",
+                "✨ Alto (Especial)"
+            ])
+
+            if len(partes) >= 4:
+                with tab_bajo:
+                    with st.container(border=True):
+                        st.markdown(partes[1].strip())
+                with tab_medio:
+                    with st.container(border=True):
+                        st.markdown(partes[2].strip())
+                with tab_alto:
+                    with st.container(border=True):
+                        st.markdown(partes[3].strip())
+            else:
+                with tab_bajo:
+                    st.markdown(consenso)
+
+            with st.expander("🐢 Ver cómo debatieron las 3 IAs (Opcional)"):
+                if len(partes) >= 1:
+                    st.caption("**Veredicto de la Tortuga Sabia:** " + partes[0].strip())
+                c1, c2 = st.columns(2)
+                c1.info(f"**🌻 Idea de Paseos:**\n\n{paseos}")
+                c2.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
+
+        except Exception as e:
+            st.error("⚠️ No se pudo conectar con la IA.")
+            st.caption(f"Detalle técnico: {e}")
