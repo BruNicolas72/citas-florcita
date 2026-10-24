@@ -1,5 +1,5 @@
 import streamlit as st
-from groq import Groq
+from duckduckgo_search import DDGS
 import datetime
 
 st.set_page_config(
@@ -8,11 +8,6 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed"
 )
-
-try:
-    API_KEY = st.secrets.get("GROQ_API_KEY", "")
-except Exception:
-    API_KEY = ""
 
 st.markdown("""
 <style>
@@ -40,36 +35,14 @@ with st.container(border=True):
     st.write("")
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
-def consultar_ia(client, rol_sistema, mensaje):
-    # Lista de fuerza bruta con los modelos oficiales más estables
-    modelos_seguros = [
-        "llama3-8b-8192", 
-        "gemma2-9b-it",
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
-    ]
-    
-    ultimo_error = ""
-    for modelo in modelos_seguros:
-        try:
-            completion = client.chat.completions.create(
-                model=modelo,
-                messages=[
-                    {"role": "system", "content": rol_sistema},
-                    {"role": "user", "content": mensaje}
-                ],
-                temperature=0.7,
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            ultimo_error = str(e)
-            continue # Si el modelo está caído o borrado, salta al siguiente al instante
-            
-    raise Exception(f"Todos los modelos fallaron. Último error: {ultimo_error}")
+def consultar_ia(rol_sistema, mensaje):
+    # Usamos DuckDuckGo de forma anónima y sin API Keys
+    prompt_completo = f"INSTRUCCIONES DE SISTEMA: {rol_sistema}\n\nSOLICITUD: {mensaje}"
+    # Conectamos con el modelo gpt-4o-mini gratuito
+    return DDGS().chat(prompt_completo, model="gpt-4o-mini")
+
 if planificar:
-    if not API_KEY:
-        st.error("🔑 Falta agregar GROQ_API_KEY en los Secrets de Streamlit Cloud.")
-    elif not idea_usuario.strip():
+    if not idea_usuario.strip():
         st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
     elif not comidas:
         st.warning("🐢 Elige al menos una comida de la lista.")
@@ -80,11 +53,10 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            client = Groq(api_key=API_KEY)
-
-            with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
-                paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.", pedido)
-                lugares = consultar_ia(client, f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.", pedido)
+            with st.spinner("🌻🐢 Conectando con la IA gratuita... (Puede tardar unos segundos extra)"):
+                paseos = consultar_ia("Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.", pedido)
+                lugares = consultar_ia(f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.", pedido)
+                
                 instruccion_juez = (
                     "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer en español.\n"
                     "Separa tu respuesta en EXACTAMENTE 4 partes usando el texto exacto `===SEP===`:\n"
@@ -92,12 +64,11 @@ if planificar:
                     "Parte 2: Itinerario Presupuesto Bajo.\n"
                     "Parte 3: Itinerario Presupuesto Medio.\n"
                     "Parte 4: Itinerario Presupuesto Alto.\n\n"
-                    "REGLA VISUAL PARA CADA PRESUPUESTO: Usa viñetas cortas y claras:\n"
+                    "REGLA VISUAL: Usa viñetas cortas:\n"
                     "- **🌅 Mañana**, **☀️ Tarde** y **🌙 Noche**.\n"
-                    f"- En cada comida ({comidas_str}), pon **Opción 1** y **Opción 2** con una descripción de 1 sola línea.\n"
-                    "- Nada de textos largos; debe leerse de un vistazo."
+                    f"- En cada comida ({comidas_str}), pon **Opción 1** y **Opción 2** con una descripción de 1 sola línea."
                 )
-                consenso = consultar_ia(client, instruccion_juez, f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes.")
+                consenso = consultar_ia(instruccion_juez, f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes.")
 
             partes = consenso.split("===SEP===")
 
@@ -121,5 +92,5 @@ if planificar:
                 st.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
 
         except Exception as e:
-            st.error("⚠️ No se pudo conectar con la IA.")
+            st.error("⚠️ La IA gratuita está saturada en este momento.")
             st.caption(f"Detalle técnico: {e}")
