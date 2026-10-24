@@ -66,8 +66,8 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            # Conectando con la API Key que ya tiene facturación habilitada
-            client = genai.Client(api_key=API_KEY)
+            # Conexión activando Vertex AI para tu clave AQ.
+            client = genai.Client(vertexai=True, api_key=API_KEY)
 
             with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
                 paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.", pedido)
