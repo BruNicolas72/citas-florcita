@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+from groq import Groq
 import datetime
 
 # ==========================================
@@ -13,9 +12,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Lee la clave directamente de los Secrets de Streamlit sin usar variables borradas
+# Lee GROQ_API_KEY (o GEMINI_API_KEY por si le dejaste el nombre anterior en Secrets)
 try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
+    API_KEY = st.secrets.get("GROQ_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
 except Exception:
     API_KEY = ""
 
@@ -83,7 +82,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. INTERFAZ SIMPLE (SOLO LO ESENCIAL)
+# 3. INTERFAZ SIMPLE Y DIRECTA
 # ==========================================
 st.markdown("<div class='titulo-principal'>🌻 Planificador de Citas 🐢</div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitulo'>Armamos tu día ideal a fuego lento, con 3 presupuestos a medida</div>", unsafe_allow_html=True)
@@ -94,40 +93,37 @@ with st.container(border=True):
         placeholder="Ej: Comer pastas el sábado por una zona linda con árboles..."
     )
     
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        fecha_cita = st.date_input(
-            "🐢 2. ¿Qué día?",
-            value=datetime.date.today() + datetime.timedelta(days=1)
-        )
-    with col2:
-        comidas = st.multiselect(
-            "🍽️ 3. ¿Qué comidas incluimos?",
-            options=["Desayuno", "Almuerzo", "Merienda", "Cena"],
-            default=["Desayuno", "Almuerzo", "Merienda", "Cena"],
-            help="Puedes quitar las que no quieras incluir."
-        )
+    fecha_cita = st.date_input(
+        "🐢 2. ¿Qué día?",
+        value=datetime.date.today() + datetime.timedelta(days=1)
+    )
+    
+    comidas = st.multiselect(
+        "🍽️ 3. ¿Qué comidas incluimos?",
+        options=["Desayuno", "Almuerzo", "Merienda", "Cena"],
+        default=["Desayuno", "Almuerzo", "Merienda", "Cena"]
+    )
     
     st.write("")
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 # ==========================================
-# 4. LÓGICA MULTI-AGENTE Y RESULTADOS CLAROS
+# 4. LÓGICA MULTI-AGENTE CON GROQ (LLAMA 3.3)
 # ==========================================
 def consultar_ia(client, rol_sistema, mensaje):
-    resp = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=mensaje,
-        config=types.GenerateContentConfig(
-            system_instruction=rol_sistema,
-            temperature=0.7,
-        )
+    completion = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": rol_sistema},
+            {"role": "user", "content": mensaje}
+        ],
+        temperature=0.7,
     )
-    return resp.text
+    return completion.choices[0].message.content
 
 if planificar:
     if not API_KEY:
-        st.error("🔑 Falta agregar `GEMINI_API_KEY` en los Secrets de Streamlit Cloud.")
+        st.error("🔑 Falta agregar GROQ_API_KEY en los Secrets de Streamlit Cloud.")
     elif not idea_usuario.strip():
         st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
     elif not comidas:
@@ -139,21 +135,24 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            client = genai.Client(api_key=API_KEY)
+            client = Groq(api_key=API_KEY)
 
             with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
+                # Agente 1: El Romántico Creativo
                 paseos = consultar_ia(
                     client,
-                    "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.",
+                    "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.",
                     pedido
                 )
+                # Agente 2: El Crítico Gastronómico
                 lugares = consultar_ia(
                     client,
-                    f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto.",
+                    f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.",
                     pedido
                 )
+                # Agente 3: El Juez Tortuga Sabia
                 instruccion_juez = (
-                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer.\n"
+                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer en español.\n"
                     "Separa tu respuesta en EXACTAMENTE 4 partes usando el texto exacto `===SEP===`:\n"
                     "Parte 1: Resumen de 2 líneas de cómo se pusieron de acuerdo.\n"
                     "Parte 2: Itinerario Presupuesto Bajo.\n"
@@ -167,7 +166,7 @@ if planificar:
                 consenso = consultar_ia(
                     client,
                     instruccion_juez,
-                    f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes."
+                    f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nRecuerda usar ===SEP=== exactamente 3 veces para dividir las 4 partes."
                 )
 
             partes = consenso.split("===SEP===")
@@ -198,9 +197,8 @@ if planificar:
             with st.expander("🐢 Ver cómo debatieron las 3 IAs (Opcional)"):
                 if len(partes) >= 1:
                     st.caption("**Veredicto de la Tortuga Sabia:** " + partes[0].strip())
-                c1, c2 = st.columns(2)
-                c1.info(f"**🌻 Idea de Paseos:**\n\n{paseos}")
-                c2.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
+                st.info(f"**🌻 Idea de Paseos:**\n\n{paseos}")
+                st.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
 
         except Exception as e:
             st.error("⚠️ No se pudo conectar con la IA.")
