@@ -1,5 +1,5 @@
 import streamlit as st
-from duckduckgo_search import DDGS
+import requests
 import datetime
 
 st.set_page_config(
@@ -36,10 +36,19 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(rol_sistema, mensaje):
-    # Usamos DuckDuckGo de forma anónima y sin API Keys
-    prompt_completo = f"INSTRUCCIONES DE SISTEMA: {rol_sistema}\n\nSOLICITUD: {mensaje}"
-    # Conectamos con el modelo gpt-4o-mini gratuito
-    return DDGS().chat(prompt_completo, model="gpt-4o-mini")
+    # Conexión directa y cruda por HTTP. 0 fallos de librerías.
+    url = "https://text.pollinations.ai/"
+    payload = {
+        "messages": [
+            {"role": "system", "content": rol_sistema},
+            {"role": "user", "content": mensaje}
+        ]
+    }
+    respuesta = requests.post(url, json=payload)
+    if respuesta.status_code == 200:
+        return respuesta.text
+    else:
+        raise Exception(f"Error de conexión. Código: {respuesta.status_code}")
 
 if planificar:
     if not idea_usuario.strip():
@@ -53,7 +62,7 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            with st.spinner("🌻🐢 Conectando con la IA gratuita... (Puede tardar unos segundos extra)"):
+            with st.spinner("🌻🐢 Conectando mágicamente a la IA libre..."):
                 paseos = consultar_ia("Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.", pedido)
                 lugares = consultar_ia(f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.", pedido)
                 
@@ -92,5 +101,5 @@ if planificar:
                 st.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
 
         except Exception as e:
-            st.error("⚠️ La IA gratuita está saturada en este momento.")
+            st.error("⚠️ Hubo un problema al contactar con la IA.")
             st.caption(f"Detalle técnico: {e}")
