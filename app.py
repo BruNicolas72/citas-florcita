@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+from groq import Groq
 import datetime
 
 st.set_page_config(
@@ -11,7 +10,7 @@ st.set_page_config(
 )
 
 try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
+    API_KEY = st.secrets.get("GROQ_API_KEY", "")
 except Exception:
     API_KEY = ""
 
@@ -42,19 +41,19 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(client, rol_sistema, mensaje):
-    resp = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=mensaje,
-        config=types.GenerateContentConfig(
-            system_instruction=rol_sistema,
-            temperature=0.7,
-        )
+    completion = client.chat.completions.create(
+        model="mixtral-8x7b-32768",
+        messages=[
+            {"role": "system", "content": rol_sistema},
+            {"role": "user", "content": mensaje}
+        ],
+        temperature=0.7,
     )
-    return resp.text
+    return completion.choices[0].message.content
 
 if planificar:
     if not API_KEY:
-        st.error("🔑 Falta agregar GEMINI_API_KEY en los Secrets de Streamlit Cloud.")
+        st.error("🔑 Falta agregar GROQ_API_KEY en los Secrets de Streamlit Cloud.")
     elif not idea_usuario.strip():
         st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
     elif not comidas:
@@ -66,14 +65,13 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            # Activamos vertexai=True para que el SDK acepte claves que empiezan con AQ.
-            client = genai.Client(vertexai=True, api_key=API_KEY)
+            client = Groq(api_key=API_KEY)
 
             with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
-                paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.", pedido)
-                lugares = consultar_ia(client, f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto.", pedido)
+                paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.", pedido)
+                lugares = consultar_ia(client, f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.", pedido)
                 instruccion_juez = (
-                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer.\n"
+                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer en español.\n"
                     "Separa tu respuesta en EXACTAMENTE 4 partes usando el texto exacto `===SEP===`:\n"
                     "Parte 1: Resumen de 2 líneas de cómo se pusieron de acuerdo.\n"
                     "Parte 2: Itinerario Presupuesto Bajo.\n"
