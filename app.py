@@ -1,5 +1,6 @@
 import streamlit as st
-from openai import OpenAI
+from google import genai
+from google.genai import types
 import datetime
 
 st.set_page_config(
@@ -9,8 +10,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Tomamos tu clave de Google Cloud que ya tiene facturación habilitada
 try:
-    API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
+    API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 except Exception:
     API_KEY = ""
 
@@ -41,40 +43,23 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(client, rol_sistema, mensaje):
-    # Lista de modelos 100% gratuitos en OpenRouter (Llama 3.3, Mistral, Gemini Lite, etc.)
-    modelos_gratis = [
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemini-2.0-flash-lite-preview-02-05:free",
-        "meta-llama/llama-3.1-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free",
-        "huggingfaceh4/zephyr-7b-beta:free"
-    ]
-    
-    ultimo_error = ""
-    for modelo in modelos_gratis:
-        try:
-            response = client.chat.completions.create(
-                model=modelo,
-                messages=[
-                    {"role": "system", "content": rol_sistema},
-                    {"role": "user", "content": mensaje}
-                ],
-                temperature=0.7,
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            ultimo_error = str(e)
-            continue # Si el modelo fue bloqueado o pasó a pago, salta al siguiente de inmediato
-            
-    raise Exception(f"Todos los modelos gratuitos fallaron. Último error: {ultimo_error}")
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=mensaje,
+        config=types.GenerateContentConfig(
+            system_instruction=rol_sistema,
+            temperature=0.7,
+        )
+    )
+    return resp.text
 
 if planificar:
-    if not API_KEY or not API_KEY.startswith("sk-or"):
-        st.error("🔑 Falta configurar la OPENROUTER_API_KEY (empieza con sk-or-...) en los Secrets.")
+    if not API_KEY or not API_KEY.startswith("AQ."):
+        st.error("🔑 Asegurate de poner tu clave oficial de Google (la que empieza con AQ.) en GEMINI_API_KEY dentro de los Secrets.")
     elif not idea_usuario.strip():
-        st.warning("🌻 Escribí una breve idea o antojo arriba para empezar.")
+        st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
     elif not comidas:
-        st.warning("🐢 Elegí al menos una comida de la lista.")
+        st.warning("🐢 Elige al menos una comida de la lista.")
     else:
         dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_str = f"{dias[fecha_cita.weekday()]} {fecha_cita.strftime('%d/%m')}"
@@ -82,13 +67,10 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            # Conexión súper estable usando la librería de OpenAI hacia OpenRouter
-            client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=API_KEY,
-            )
+            # Conexión directa a Google Cloud con tu clave habilitada
+            client = genai.Client(vertexai=True, api_key=API_KEY)
 
-            with st.spinner("🌻🐢 Las IAs de verdad están procesando tu plan..."):
+            with st.spinner("🌻🐢 Conectando con Gemini Premium..."):
                 paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.", pedido)
                 lugares = consultar_ia(client, f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto.", pedido)
                 
@@ -109,7 +91,7 @@ if planificar:
             partes = consenso.split("===SEP===")
 
             st.write("")
-            st.markdown("### ✨ Elegí tu nivel de presupuesto:")
+            st.markdown("### ✨ Elige tu nivel de presupuesto:")
             tab_bajo, tab_medio, tab_alto = st.tabs(["🐢 Bajo (Económico)", "🌻 Medio (Equilibrado)", "✨ Alto (Especial)"])
 
             if len(partes) >= 4:
@@ -128,5 +110,5 @@ if planificar:
                 st.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
 
         except Exception as e:
-            st.error("⚠️ No se pudo conectar con la IA.")
+            st.error("⚠️ Error de conexión.")
             st.caption(f"Detalle técnico: {e}")
