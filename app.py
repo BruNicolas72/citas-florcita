@@ -41,21 +41,16 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(client, rol_sistema, mensaje):
-    # 1. Le preguntamos a Groq qué modelos están activos ahora mismo
     modelos_disponibles = client.models.list()
     
-    # 2. Buscamos el primer modelo de Llama o Mixtral que esté funcionando
     modelo_elegido = None
     for m in modelos_disponibles.data:
-        if "llama" in m.id.lower() or "mixtral" in m.id.lower():
+        id_modelo = m.id.lower()
+        # Filtramos explícitamente los modelos de moderación, visión o audio
+        if "guard" not in id_modelo and "vision" not in id_modelo and "whisper" not in id_modelo:
             modelo_elegido = m.id
             break
-            
-    # Si no hay ninguno con esos nombres, agarramos el primero de la lista
-    if not modelo_elegido and modelos_disponibles.data:
-        modelo_elegido = modelos_disponibles.data[0].id
 
-    # 3. Hacemos la consulta con el modelo que sabemos que sí existe
     completion = client.chat.completions.create(
         model=modelo_elegido,
         messages=[
