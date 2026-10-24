@@ -112,7 +112,7 @@ with st.container(border=True):
 # ==========================================
 def consultar_ia(client, rol_sistema, mensaje):
     completion = client.chat.completions.create(
-        model="llama3-70b-8192",
+        model="llama-3.1-70b-versatile",
         messages=[
             {"role": "system", "content": rol_sistema},
             {"role": "user", "content": mensaje}
