@@ -112,7 +112,7 @@ with st.container(border=True):
 # ==========================================
 def consultar_ia(client, rol_sistema, mensaje):
     completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="llama3-70b-8192",
         messages=[
             {"role": "system", "content": rol_sistema},
             {"role": "user", "content": mensaje}
@@ -120,7 +120,6 @@ def consultar_ia(client, rol_sistema, mensaje):
         temperature=0.7,
     )
     return completion.choices[0].message.content
-
 if planificar:
     if not API_KEY:
         st.error("🔑 Falta agregar GROQ_API_KEY en los Secrets de Streamlit Cloud.")
