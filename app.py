@@ -41,26 +41,31 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(client, rol_sistema, mensaje):
-    modelos_disponibles = client.models.list()
+    # Lista de fuerza bruta con los modelos oficiales más estables
+    modelos_seguros = [
+        "llama3-8b-8192", 
+        "gemma2-9b-it",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+    ]
     
-    modelo_elegido = None
-    for m in modelos_disponibles.data:
-        id_modelo = m.id.lower()
-        # Filtramos explícitamente los modelos de moderación, visión o audio
-        if "guard" not in id_modelo and "vision" not in id_modelo and "whisper" not in id_modelo:
-            modelo_elegido = m.id
-            break
-
-    completion = client.chat.completions.create(
-        model=modelo_elegido,
-        messages=[
-            {"role": "system", "content": rol_sistema},
-            {"role": "user", "content": mensaje}
-        ],
-        temperature=0.7,
-    )
-    return completion.choices[0].message.content
-
+    ultimo_error = ""
+    for modelo in modelos_seguros:
+        try:
+            completion = client.chat.completions.create(
+                model=modelo,
+                messages=[
+                    {"role": "system", "content": rol_sistema},
+                    {"role": "user", "content": mensaje}
+                ],
+                temperature=0.7,
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            ultimo_error = str(e)
+            continue # Si el modelo está caído o borrado, salta al siguiente al instante
+            
+    raise Exception(f"Todos los modelos fallaron. Último error: {ultimo_error}")
 if planificar:
     if not API_KEY:
         st.error("🔑 Falta agregar GROQ_API_KEY en los Secrets de Streamlit Cloud.")
