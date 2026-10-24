@@ -41,15 +41,32 @@ with st.container(border=True):
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
 def consultar_ia(client, rol_sistema, mensaje):
-    response = client.chat.completions.create(
-        model="google/gemini-2.5-flash:free",  # Usamos el modelo gratuito desde OpenRouter
-        messages=[
-            {"role": "system", "content": rol_sistema},
-            {"role": "user", "content": mensaje}
-        ],
-        temperature=0.7,
-    )
-    return response.choices[0].message.content
+    # Lista de modelos 100% gratuitos en OpenRouter (Llama 3.3, Mistral, Gemini Lite, etc.)
+    modelos_gratis = [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-lite-preview-02-05:free",
+        "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "huggingfaceh4/zephyr-7b-beta:free"
+    ]
+    
+    ultimo_error = ""
+    for modelo in modelos_gratis:
+        try:
+            response = client.chat.completions.create(
+                model=modelo,
+                messages=[
+                    {"role": "system", "content": rol_sistema},
+                    {"role": "user", "content": mensaje}
+                ],
+                temperature=0.7,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            ultimo_error = str(e)
+            continue # Si el modelo fue bloqueado o pasó a pago, salta al siguiente de inmediato
+            
+    raise Exception(f"Todos los modelos gratuitos fallaron. Último error: {ultimo_error}")
 
 if planificar:
     if not API_KEY or not API_KEY.startswith("sk-or"):
