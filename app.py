@@ -1,5 +1,6 @@
 import streamlit as st
-import requests
+from google import genai
+from google.genai import types
 import datetime
 
 st.set_page_config(
@@ -8,6 +9,11 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed"
 )
+
+try:
+    API_KEY = st.secrets.get("GEMINI_API_KEY", "")
+except Exception:
+    API_KEY = ""
 
 st.markdown("""
 <style>
@@ -35,23 +41,21 @@ with st.container(border=True):
     st.write("")
     planificar = st.button("🌻 Armar mi cita ideal 🐢")
 
-def consultar_ia(rol_sistema, mensaje):
-    # Conexión directa y cruda por HTTP. 0 fallos de librerías.
-    url = "https://text.pollinations.ai/"
-    payload = {
-        "messages": [
-            {"role": "system", "content": rol_sistema},
-            {"role": "user", "content": mensaje}
-        ]
-    }
-    respuesta = requests.post(url, json=payload)
-    if respuesta.status_code == 200:
-        return respuesta.text
-    else:
-        raise Exception(f"Error de conexión. Código: {respuesta.status_code}")
+def consultar_ia(client, rol_sistema, mensaje):
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=mensaje,
+        config=types.GenerateContentConfig(
+            system_instruction=rol_sistema,
+            temperature=0.7,
+        )
+    )
+    return resp.text
 
 if planificar:
-    if not idea_usuario.strip():
+    if not API_KEY:
+        st.error("🔑 Falta la API Key en los Secrets de Streamlit.")
+    elif not idea_usuario.strip():
         st.warning("🌻 Escribe una breve idea o antojo arriba para empezar.")
     elif not comidas:
         st.warning("🐢 Elige al menos una comida de la lista.")
@@ -62,22 +66,26 @@ if planificar:
         pedido = f"Idea/Zona: {idea_usuario} | Día: {dia_str} | Comidas: {comidas_str}"
 
         try:
-            with st.spinner("🌻🐢 Conectando mágicamente a la IA libre..."):
-                paseos = consultar_ia("Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto en español.", pedido)
-                lugares = consultar_ia(f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto en español.", pedido)
+            # Conectando con la API Key que ya tiene facturación habilitada
+            client = genai.Client(api_key=API_KEY)
+
+            with st.spinner("🌻🐢 Las 3 IAs están poniéndose de acuerdo en tu plan..."):
+                paseos = consultar_ia(client, "Eres 'El Romántico Creativo' 🌻. Propón paseos breves y encantadores (mañana, tarde y noche) para presupuestos bajo, medio y alto.", pedido)
+                lugares = consultar_ia(client, f"Eres 'El Crítico Gastronómico' 🍽️. Propón 2 opciones concretas de lugares o menús por cada comida ({comidas_str}) para presupuesto bajo, medio y alto.", pedido)
                 
                 instruccion_juez = (
-                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer en español.\n"
+                    "Eres 'El Juez Tortuga Sabia' 🐢🌻. Une las ideas en un itinerario súper claro, breve y fácil de leer.\n"
                     "Separa tu respuesta en EXACTAMENTE 4 partes usando el texto exacto `===SEP===`:\n"
                     "Parte 1: Resumen de 2 líneas de cómo se pusieron de acuerdo.\n"
                     "Parte 2: Itinerario Presupuesto Bajo.\n"
                     "Parte 3: Itinerario Presupuesto Medio.\n"
                     "Parte 4: Itinerario Presupuesto Alto.\n\n"
-                    "REGLA VISUAL: Usa viñetas cortas:\n"
+                    "REGLA VISUAL PARA CADA PRESUPUESTO: Usa viñetas cortas y claras:\n"
                     "- **🌅 Mañana**, **☀️ Tarde** y **🌙 Noche**.\n"
-                    f"- En cada comida ({comidas_str}), pon **Opción 1** y **Opción 2** con una descripción de 1 sola línea."
+                    f"- En cada comida ({comidas_str}), pon **Opción 1** y **Opción 2** con una descripción de 1 sola línea.\n"
+                    "- Nada de textos largos; debe leerse de un vistazo."
                 )
-                consenso = consultar_ia(instruccion_juez, f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes.")
+                consenso = consultar_ia(client, instruccion_juez, f"Pedido: {pedido}\nPaseos: {paseos}\nComidas: {lugares}\nUsa ===SEP=== entre las 4 partes.")
 
             partes = consenso.split("===SEP===")
 
@@ -101,5 +109,5 @@ if planificar:
                 st.success(f"**🍽️ Idea Gastronómica:**\n\n{lugares}")
 
         except Exception as e:
-            st.error("⚠️ Hubo un problema al contactar con la IA.")
+            st.error("⚠️ No se pudo conectar con la IA.")
             st.caption(f"Detalle técnico: {e}")
